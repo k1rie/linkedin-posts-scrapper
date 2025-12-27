@@ -3,7 +3,7 @@ const path = require('path');
 const loggerService = require('./loggerService');
 
 const MAX_PROFILES_PER_DAY = parseInt(process.env.MAX_PROFILES_PER_DAY || '50');
-const RATE_LIMIT_FILE = path.join(__dirname, '../../data/rate-limit.json');
+const RATE_LIMIT_FILE = path.join(__dirname, '../data/rate-limit.json');
 
 /**
  * Asegurar que el directorio de datos existe

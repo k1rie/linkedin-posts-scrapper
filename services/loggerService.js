@@ -7,7 +7,7 @@ const fs = require('fs').promises;
 const path = require('path');
 require('dotenv').config();
 
-const LOG_DIR = path.join(__dirname, '../../data/logs');
+const LOG_DIR = path.join(__dirname, '../data/logs');
 const CURRENT_LOG_LEVEL = process.env.LOG_LEVEL || 'INFO';
 
 /**
