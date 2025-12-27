@@ -30,6 +30,7 @@ Crea un archivo `.env` en la carpeta `backend` basándote en `.env.example`:
 # Apify Configuration
 APIFY_API_TOKEN=tu_token_de_apify
 APIFY_ACTOR_ID=A3cAPGpwBEG8RJwse
+APIFY_BATCH_SIZE=10  # Número de perfiles por lote (recomendado: 10-20)
 
 # HubSpot Configuration
 HUBSPOT_TOKEN=tu_token_de_hubspot
@@ -68,6 +69,7 @@ LOG_LEVEL=INFO
 #### Apify
 - `APIFY_API_TOKEN`: Token de API de Apify (requerido)
 - `APIFY_ACTOR_ID`: ID del Actor de Apify (por defecto: `A3cAPGpwBEG8RJwse`)
+- `APIFY_BATCH_SIZE`: Número de perfiles por lote para evitar timeouts (por defecto: `10`, recomendado: `10-20`)
 
 #### HubSpot
 - `HUBSPOT_TOKEN`: Token de API de HubSpot (requerido)
@@ -257,9 +259,22 @@ linkedin-posts-apify/
 
 1. **Obtener perfiles desde HubSpot**: El sistema obtiene perfiles de LinkedIn desde una lista de HubSpot
 2. **Verificar rate limit**: Se verifica si se puede procesar más perfiles hoy
-3. **Extraer posts con Apify**: Se usa el Actor de Apify para extraer posts de los perfiles
-4. **Crear deals en HubSpot**: Para cada post extraído, se crea un deal en HubSpot (si no es duplicado)
-5. **Actualizar rate limit**: Se incrementa el contador de perfiles procesados
+3. **Dividir en lotes**: Los perfiles se dividen en lotes según `APIFY_BATCH_SIZE` (por defecto 10)
+4. **Extraer posts con Apify**: Se usa el Actor de Apify para extraer posts de los perfiles (por lotes)
+5. **Crear deals en HubSpot**: Para cada post extraído, se crea un deal en HubSpot (si no es duplicado)
+6. **Actualizar rate limit**: Se incrementa el contador de perfiles procesados
+
+### ¿Por qué dividir en lotes?
+
+Cuando se procesan muchos perfiles (ej: 100+), hacer una sola llamada a Apify puede causar:
+- Timeouts de conexión (`ECONNRESET`)
+- Respuestas demasiado grandes
+- Fallos en la extracción
+
+Al dividir en lotes de 10-20 perfiles:
+- ✅ Conexiones más estables
+- ✅ Mejor manejo de errores (si falla un lote, los demás continúan)
+- ✅ Progreso visible en tiempo real
 
 ## Rate Limiting
 

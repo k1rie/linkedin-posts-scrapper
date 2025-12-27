@@ -10,8 +10,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "scrape": "node scripts/scrape.js",
-    "test-structure": "node scripts/test-structure.js"
+    "scrape": "node scripts/scrape.js"
   },
   "keywords": [
     "linkedin",
