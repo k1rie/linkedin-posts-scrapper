@@ -323,7 +323,8 @@ const createDealForPost = async (postData, profileUrl, profileName = null) => {
       dealname: `${authorName} - Post LinkedIn`,
       description: description,
       amount: '0', // Sin monto inicial
-      deal_currency_code: 'MXN'
+      deal_currency_code: 'MXN',
+      link_original_de_la_noticia: postLink // Guardar el link del post
     };
 
     // Obtener pipeline y stage desde .env o usar valores por defecto
@@ -388,8 +389,146 @@ const createDealForPost = async (postData, profileUrl, profileName = null) => {
   }
 };
 
+/**
+ * Marcar un contacto como scrapeado en HubSpot
+ */
+const markContactAsScraped = async (contactId) => {
+  if (!HUBSPOT_TOKEN) {
+    return false;
+  }
+
+  try {
+    loggerService.debug(`Marcando contacto ${contactId} como scrapeado`);
+    
+    await axios.patch(
+      `${HUBSPOT_BASE_URL}/crm/v3/objects/contacts/${contactId}`,
+      {
+        properties: {
+          scrapeado_linkedin: 'true' // Propiedad personalizada para marcar como scrapeado
+        }
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${HUBSPOT_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    loggerService.debug(`Contacto ${contactId} marcado como scrapeado`);
+    return true;
+  } catch (error) {
+    loggerService.warn(`Error marcando contacto ${contactId} como scrapeado:`, error.message);
+    return false;
+  }
+};
+
+/**
+ * Resetear todos los contactos de una lista como no scrapeados
+ */
+const resetAllContactsScrapedStatus = async () => {
+  if (!HUBSPOT_TOKEN) {
+    return false;
+  }
+
+  try {
+    loggerService.info('\n=== RESETEANDO ESTADO DE SCRAPING DE CONTACTOS ===');
+    
+    // Obtener todos los contactos de la lista
+    let contacts = [];
+    let after = null;
+    let hasMore = true;
+    let attempts = 0;
+    const maxAttempts = 150;
+
+    while (hasMore && attempts < maxAttempts) {
+      attempts++;
+      
+      const params = new URLSearchParams();
+      params.append('count', '100');
+      params.append('property', 'scrapeado_linkedin');
+      if (after) {
+        params.append('vidOffset', after);
+      }
+
+      try {
+        const url = `https://api.hubapi.com/contacts/v1/lists/${HUBSPOT_LIST_ID}/contacts/all?${params.toString()}`;
+        
+        const contactsResponse = await axios.get(
+          url,
+          {
+            headers: {
+              'Authorization': `Bearer ${HUBSPOT_TOKEN}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        const batchContacts = contactsResponse.data.contacts || [];
+        contacts = contacts.concat(batchContacts);
+
+        hasMore = contactsResponse.data['has-more'] === true;
+        if (hasMore) {
+          after = contactsResponse.data['vid-offset'];
+        }
+      } catch (error) {
+        loggerService.error(`Error obteniendo contactos para resetear:`, error.message);
+        hasMore = false;
+      }
+    }
+
+    loggerService.info(`Total de contactos a resetear: ${contacts.length}`);
+
+    // Resetear cada contacto en lotes
+    let resetCount = 0;
+    const BATCH_SIZE = 10;
+
+    for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
+      const batch = contacts.slice(i, i + BATCH_SIZE);
+      
+      const resetPromises = batch.map(contact => 
+        axios.patch(
+          `${HUBSPOT_BASE_URL}/crm/v3/objects/contacts/${contact.vid}`,
+          {
+            properties: {
+              scrapeado_linkedin: 'false'
+            }
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${HUBSPOT_TOKEN}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        ).catch(error => {
+          loggerService.warn(`Error reseteando contacto ${contact.vid}:`, error.message);
+          return null;
+        })
+      );
+
+      const results = await Promise.all(resetPromises);
+      resetCount += results.filter(r => r !== null).length;
+
+      loggerService.debug(`Reseteados ${resetCount}/${contacts.length} contactos...`);
+
+      // Pequeña pausa entre lotes
+      if (i + BATCH_SIZE < contacts.length) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    loggerService.success(`✓ ${resetCount} contactos reseteados como no scrapeados`);
+    return true;
+  } catch (error) {
+    loggerService.error('Error reseteando estado de contactos:', error);
+    return false;
+  }
+};
+
 module.exports = {
   getLinkedInProfilesFromHubSpot,
-  createDealForPost
+  createDealForPost,
+  markContactAsScraped,
+  resetAllContactsScrapedStatus
 };
 

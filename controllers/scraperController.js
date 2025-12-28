@@ -123,6 +123,11 @@ const runScheduledScrape = async () => {
       processedCount += postsSaved;
       profilesProcessed++;
 
+      // Marcar contacto como scrapeado en HubSpot
+      if (profileInfo?.contactId) {
+        await hubspotService.markContactAsScraped(profileInfo.contactId);
+      }
+
       loggerService.info(`  Resumen perfil: ${postsSaved} guardados, ${postsDuplicated} duplicados, ${postsFailed} fallidos`);
     }
 
@@ -143,6 +148,10 @@ const runScheduledScrape = async () => {
     loggerService.info(`Fallidos: ${summary.failed}`);
     loggerService.info(`Duplicados: ${summary.duplicates}`);
     loggerService.info(`Perfiles procesados: ${summary.profilesProcessed}`);
+
+    // Resetear todos los contactos como no scrapeados al final
+    loggerService.info('\n=== RESETEANDO CONTACTOS ===');
+    await hubspotService.resetAllContactsScrapedStatus();
 
     return {
       success: true,
@@ -289,6 +298,10 @@ const extractPosts = async (req, res) => {
       duplicates: results.filter(r => r.duplicate).length,
       profilesProcessed: profilesProcessed
     };
+
+    // Resetear todos los contactos como no scrapeados al final
+    loggerService.info('\n=== RESETEANDO CONTACTOS ===');
+    await hubspotService.resetAllContactsScrapedStatus();
 
     res.json({ 
       success: true,

@@ -10,7 +10,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "scrape": "node scripts/scrape.js"
+    "scrape": "node scripts/scrape.js",
+    "setup-properties": "node scripts/create-hubspot-properties.js"
   },
   "keywords": [
     "linkedin",
