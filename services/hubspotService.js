@@ -320,12 +320,21 @@ const createDealForPost = async (postData, profileUrl, profileName = null) => {
 
     // Preparar propiedades del deal (solo propiedades estándar de HubSpot)
     const dealProperties = {
-      dealname: `${authorName} - Post LinkedIn`,
+      dealname: `Post: ${authorName} - Post LinkedIn`,
       description: description,
       amount: '0', // Sin monto inicial
       deal_currency_code: 'MXN',
       link_original_de_la_noticia: postLink // Guardar el link del post
     };
+
+    // Log de datos que se van a guardar
+    loggerService.info('=== GUARDANDO DEAL EN HUBSPOT ===');
+    loggerService.info(`Programa: Post`);
+    loggerService.info(`Deal Name: ${dealProperties.dealname}`);
+    loggerService.info(`Author: ${authorName}`);
+    loggerService.info(`Post URL: ${postLink}`);
+    loggerService.info(`Profile URL: ${profileUrl || 'No disponible'}`);
+    loggerService.info('================================');
 
     // Obtener pipeline y stage desde .env o usar valores por defecto
     const envPipelineId = process.env.HUBSPOT_PIPELINE_ID || '811215668'; // Default: Prospección
@@ -378,6 +387,12 @@ const createDealForPost = async (postData, profileUrl, profileName = null) => {
     );
 
     loggerService.success(`Deal creado en HubSpot: ${response.data.id}`);
+    loggerService.info(`=== DEAL CREADO EXITOSAMENTE ===`);
+    loggerService.info(`Deal ID: ${response.data.id}`);
+    loggerService.info(`Deal Name: ${dealProperties.dealname}`);
+    loggerService.info(`Pipeline: ${dealProperties.pipeline || 'N/A'}`);
+    loggerService.info(`Stage: ${dealProperties.dealstage || 'N/A'}`);
+    loggerService.info('================================');
     return response.data;
   } catch (error) {
     loggerService.error('Error guardando en HubSpot', error);
