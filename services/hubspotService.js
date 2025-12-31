@@ -6,6 +6,89 @@ const HUBSPOT_LIST_ID = process.env.HUBSPOT_LIST_ID || '5557';
 const HUBSPOT_BASE_URL = 'https://api.hubapi.com';
 
 /**
+ * Verificar si todos los contactos están scrapeados
+ */
+const areAllContactsScraped = async () => {
+  if (!HUBSPOT_TOKEN) {
+    return false;
+  }
+
+  try {
+    // Obtener todos los contactos de la lista
+    let contacts = [];
+    let after = null;
+    let hasMore = true;
+    let attempts = 0;
+    const maxAttempts = 150;
+
+    while (hasMore && attempts < maxAttempts) {
+      attempts++;
+      
+      const params = new URLSearchParams();
+      params.append('count', '100');
+      params.append('property', 'scrapeado_linkedin');
+      if (after) {
+        params.append('vidOffset', after);
+      }
+
+      try {
+        const url = `https://api.hubapi.com/contacts/v1/lists/${HUBSPOT_LIST_ID}/contacts/all?${params.toString()}`;
+        
+        const contactsResponse = await axios.get(
+          url,
+          {
+            headers: {
+              'Authorization': `Bearer ${HUBSPOT_TOKEN}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        const batchContacts = contactsResponse.data.contacts || [];
+        contacts = contacts.concat(batchContacts);
+
+        hasMore = contactsResponse.data['has-more'] === true;
+        if (hasMore) {
+          after = contactsResponse.data['vid-offset'];
+        }
+      } catch (error) {
+        loggerService.error(`Error obteniendo contactos para verificar:`, error.message);
+        hasMore = false;
+      }
+    }
+
+    if (contacts.length === 0) {
+      return false; // No hay contactos, no se puede considerar que todos están scrapeados
+    }
+
+    // Verificar que TODOS los contactos estén marcados como scrapeados
+    let allScraped = true;
+    let scrapedCount = 0;
+    let notScrapedCount = 0;
+
+    for (const contact of contacts) {
+      const properties = contact.properties || {};
+      const scrapedStatus = properties.scrapeado_linkedin?.value || properties.scrapeado_linkedin;
+      
+      // Considerar scrapeado si es 'true' o true
+      if (scrapedStatus === 'true' || scrapedStatus === true) {
+        scrapedCount++;
+      } else {
+        notScrapedCount++;
+        allScraped = false;
+      }
+    }
+
+    loggerService.info(`Verificación de scraping: ${scrapedCount} scrapeados, ${notScrapedCount} no scrapeados de ${contacts.length} total`);
+    
+    return allScraped;
+  } catch (error) {
+    loggerService.error('Error verificando estado de contactos:', error);
+    return false;
+  }
+};
+
+/**
  * Resetear todos los contactos de una lista como no scrapeados
  */
 const resetAllContactsScrapedStatus = async () => {
@@ -192,79 +275,86 @@ const getLinkedInProfilesFromHubSpot = async () => {
     
     loggerService.info(`Contactos no scrapeados: ${unscrapedContacts.length} de ${contacts.length}`);
     
-    // Si todos los contactos ya están scrapeados, resetear todos y volver a obtener
+    // Si no hay contactos no scrapeados, verificar si TODOS están scrapeados antes de resetear
     if (unscrapedContacts.length === 0 && contacts.length > 0) {
-      loggerService.info(`\n⚠️  Todos los contactos ya fueron scrapeados. Reiniciando estado...`);
-      await resetAllContactsScrapedStatus();
-      loggerService.info(`✓ Estado reiniciado. Volviendo a obtener contactos...`);
+      loggerService.info(`\n⚠️  No se encontraron contactos no scrapeados. Verificando si TODOS están scrapeados...`);
+      const allScraped = await areAllContactsScraped();
       
-      // Volver a obtener los contactos después del reset
-      contacts = [];
-      after = null;
-      hasMore = true;
-      attempts = 0;
-      
-      while (hasMore && attempts < maxAttempts) {
-        attempts++;
+      if (allScraped) {
+        loggerService.info(`✓ Todos los contactos están scrapeados. Reiniciando estado...`);
+        await resetAllContactsScrapedStatus();
+        loggerService.info(`✓ Estado reiniciado. Volviendo a obtener contactos...`);
         
-        const properties = ['linkedin', 'hs_linkedin_url', 'linkedin_profile_link', 'firstname', 'lastname', 'name', 'scrapeado_linkedin'];
+        // Volver a obtener los contactos después del reset
+        contacts = [];
+        after = null;
+        hasMore = true;
+        attempts = 0;
         
-        const params = new URLSearchParams();
-        params.append('count', '100');
-        properties.forEach(prop => {
-          params.append('property', prop);
-        });
-        if (after) {
-          params.append('vidOffset', after);
-        }
-
-        try {
-          loggerService.debug(`Obteniendo página ${attempts} (después del reset)...`);
-          const url = `https://api.hubapi.com/contacts/v1/lists/${HUBSPOT_LIST_ID}/contacts/all?${params.toString()}`;
+        while (hasMore && attempts < maxAttempts) {
+          attempts++;
           
-          const contactsResponse = await axios.get(
-            url,
-            {
-              headers: {
-                'Authorization': `Bearer ${HUBSPOT_TOKEN}`,
-                'Content-Type': 'application/json'
+          const properties = ['linkedin', 'hs_linkedin_url', 'linkedin_profile_link', 'firstname', 'lastname', 'name', 'scrapeado_linkedin'];
+          
+          const params = new URLSearchParams();
+          params.append('count', '100');
+          properties.forEach(prop => {
+            params.append('property', prop);
+          });
+          if (after) {
+            params.append('vidOffset', after);
+          }
+
+          try {
+            loggerService.debug(`Obteniendo página ${attempts} (después del reset)...`);
+            const url = `https://api.hubapi.com/contacts/v1/lists/${HUBSPOT_LIST_ID}/contacts/all?${params.toString()}`;
+            
+            const contactsResponse = await axios.get(
+              url,
+              {
+                headers: {
+                  'Authorization': `Bearer ${HUBSPOT_TOKEN}`,
+                  'Content-Type': 'application/json'
+                }
+              }
+            );
+
+            const batchContacts = contactsResponse.data.contacts || [];
+            loggerService.debug(`Contactos en esta página: ${batchContacts.length}`);
+            
+            contacts = contacts.concat(batchContacts);
+
+            hasMore = contactsResponse.data['has-more'] === true;
+            if (hasMore) {
+              after = contactsResponse.data['vid-offset'];
+            }
+          } catch (error) {
+            loggerService.error(`Error en página ${attempts}:`, error.message);
+            
+            if (error.response) {
+              if (error.response.status === 404) {
+                throw new Error(`Lista ${HUBSPOT_LIST_ID} no encontrada. Verifica el List ID en .env`);
+              }
+              if (error.response.status === 401) {
+                throw new Error(`Token de HubSpot inválido o expirado`);
               }
             }
-          );
-
-          const batchContacts = contactsResponse.data.contacts || [];
-          loggerService.debug(`Contactos en esta página: ${batchContacts.length}`);
-          
-          contacts = contacts.concat(batchContacts);
-
-          hasMore = contactsResponse.data['has-more'] === true;
-          if (hasMore) {
-            after = contactsResponse.data['vid-offset'];
+            
+            hasMore = false;
           }
-        } catch (error) {
-          loggerService.error(`Error en página ${attempts}:`, error.message);
-          
-          if (error.response) {
-            if (error.response.status === 404) {
-              throw new Error(`Lista ${HUBSPOT_LIST_ID} no encontrada. Verifica el List ID en .env`);
-            }
-            if (error.response.status === 401) {
-              throw new Error(`Token de HubSpot inválido o expirado`);
-            }
-          }
-          
-          hasMore = false;
         }
+        
+        // Filtrar nuevamente los contactos después del reset
+        unscrapedContacts = contacts.filter(contact => {
+          const properties = contact.properties || {};
+          const scrapedStatus = properties.scrapeado_linkedin?.value || properties.scrapeado_linkedin;
+          return !scrapedStatus || scrapedStatus === 'false' || scrapedStatus === false;
+        });
+        
+        loggerService.info(`Contactos obtenidos después del reset: ${unscrapedContacts.length} de ${contacts.length}`);
+      } else {
+        loggerService.warn(`⚠️  Algunos contactos aún no están scrapeados. No se reseteará el estado.`);
       }
-      
-      // Filtrar nuevamente los contactos después del reset
-      unscrapedContacts = contacts.filter(contact => {
-        const properties = contact.properties || {};
-        const scrapedStatus = properties.scrapeado_linkedin?.value || properties.scrapeado_linkedin;
-        return !scrapedStatus || scrapedStatus === 'false' || scrapedStatus === false;
-      });
-      
-      loggerService.info(`Contactos obtenidos después del reset: ${unscrapedContacts.length} de ${contacts.length}`);
     }
     loggerService.info(`Procesando contactos para extraer URLs de LinkedIn...`);
     
@@ -640,6 +730,7 @@ module.exports = {
   getLinkedInProfilesFromHubSpot,
   createDealForPost,
   markContactAsScraped,
-  resetAllContactsScrapedStatus
+  resetAllContactsScrapedStatus,
+  areAllContactsScraped
 };
 

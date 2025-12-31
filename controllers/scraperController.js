@@ -149,9 +149,15 @@ const runScheduledScrape = async () => {
     loggerService.info(`Duplicados: ${summary.duplicates}`);
     loggerService.info(`Perfiles procesados: ${summary.profilesProcessed}`);
 
-    // Resetear todos los contactos como no scrapeados al final
-    loggerService.info('\n=== RESETEANDO CONTACTOS ===');
-    await hubspotService.resetAllContactsScrapedStatus();
+    // Verificar si todos los contactos están scrapeados y resetear solo en ese caso
+    loggerService.info('\n=== VERIFICANDO ESTADO DE CONTACTOS ===');
+    const allScraped = await hubspotService.areAllContactsScraped();
+    if (allScraped) {
+      loggerService.info('✓ Todos los contactos están scrapeados. Reiniciando estado...');
+      await hubspotService.resetAllContactsScrapedStatus();
+    } else {
+      loggerService.info('⚠️  Aún hay contactos sin scrapear. No se reseteará el estado.');
+    }
 
     return {
       success: true,
@@ -299,9 +305,15 @@ const extractPosts = async (req, res) => {
       profilesProcessed: profilesProcessed
     };
 
-    // Resetear todos los contactos como no scrapeados al final
-    loggerService.info('\n=== RESETEANDO CONTACTOS ===');
-    await hubspotService.resetAllContactsScrapedStatus();
+    // Verificar si todos los contactos están scrapeados y resetear solo en ese caso
+    loggerService.info('\n=== VERIFICANDO ESTADO DE CONTACTOS ===');
+    const allScraped = await hubspotService.areAllContactsScraped();
+    if (allScraped) {
+      loggerService.info('✓ Todos los contactos están scrapeados. Reiniciando estado...');
+      await hubspotService.resetAllContactsScrapedStatus();
+    } else {
+      loggerService.info('⚠️  Aún hay contactos sin scrapear. No se reseteará el estado.');
+    }
 
     res.json({ 
       success: true,
