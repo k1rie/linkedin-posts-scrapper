@@ -726,11 +726,82 @@ const markContactAsScraped = async (contactId) => {
   }
 };
 
+/**
+ * Obtener un deal específico por su ID con TODAS las propiedades
+ */
+const getDealById = async (dealId) => {
+  if (!HUBSPOT_TOKEN) {
+    throw new Error('HUBSPOT_TOKEN no está configurado en .env');
+  }
+
+  if (!dealId) {
+    throw new Error('Deal ID es requerido');
+  }
+
+  try {
+    loggerService.debug(`Obteniendo deal con ID: ${dealId}`);
+
+    // No especificamos propiedades para obtener TODAS las disponibles automáticamente
+    // HubSpot devuelve todas las propiedades con valores no vacíos cuando no se especifican
+    const response = await axios.get(
+      `${HUBSPOT_BASE_URL}/crm/v3/objects/deals/${dealId}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${HUBSPOT_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const deal = response.data;
+
+    // Procesar las propiedades para extraer los valores correctamente
+    const processedProperties = {};
+    if (deal.properties) {
+      for (const [key, value] of Object.entries(deal.properties)) {
+        // En HubSpot, las propiedades pueden venir como objetos con 'value' o como valores directos
+        processedProperties[key] = value?.value !== undefined ? value.value : value;
+      }
+    }
+
+    loggerService.debug(`Deal obtenido exitosamente: ${deal.id} con ${Object.keys(processedProperties).length} propiedades`);
+
+    // Devolver toda la información del deal con TODAS las propiedades
+    const dealInfo = {
+      id: deal.id,
+      createdAt: deal.createdAt,
+      updatedAt: deal.updatedAt,
+      archived: deal.archived,
+      properties: processedProperties
+    };
+
+    return dealInfo;
+
+  } catch (error) {
+    loggerService.error(`Error obteniendo deal ${dealId}:`, error.message);
+
+    if (error.response) {
+      if (error.response.status === 404) {
+        throw new Error(`Deal con ID ${dealId} no encontrado`);
+      }
+      if (error.response.status === 401) {
+        throw new Error('Token de HubSpot inválido o expirado');
+      }
+      if (error.response.status === 403) {
+        throw new Error('No tienes permisos para acceder a este deal');
+      }
+    }
+
+    throw new Error(`Error obteniendo deal: ${error.message}`);
+  }
+};
+
 module.exports = {
   getLinkedInProfilesFromHubSpot,
   createDealForPost,
   markContactAsScraped,
   resetAllContactsScrapedStatus,
-  areAllContactsScraped
+  areAllContactsScraped,
+  getDealById
 };
 

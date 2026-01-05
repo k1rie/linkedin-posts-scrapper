@@ -54,7 +54,7 @@ const extractPostsFromProfiles = async (profileUrls) => {
         targetUrls: batch,
         maxPosts: parseInt(process.env.MAX_POSTS || '5'),
         includeQuotePosts: process.env.INCLUDE_QUOTE_POSTS !== 'false',
-        includeReposts: process.env.INCLUDE_REPOSTS !== 'false',
+        includeReposts: process.env.INCLUDE_REPOSTS === 'true',
         scrapeReactions: process.env.SCRAPE_REACTIONS === 'true',
         maxReactions: parseInt(process.env.MAX_REACTIONS || '5'),
         scrapeComments: process.env.SCRAPE_COMMENTS === 'true',
