@@ -54,7 +54,7 @@ SCRAPE_INTERVAL_MINUTES=60
 # Apify Actor Input Configuration
 MAX_POSTS=5
 INCLUDE_QUOTE_POSTS=true
-INCLUDE_REPOSTS=true
+INCLUDE_REPOSTS=false
 SCRAPE_REACTIONS=false
 MAX_REACTIONS=5
 SCRAPE_COMMENTS=false
@@ -96,7 +96,7 @@ LOG_LEVEL=INFO
 #### Apify Actor Input
 - `MAX_POSTS`: Máximo número de posts a extraer por perfil (por defecto: `5`)
 - `INCLUDE_QUOTE_POSTS`: Incluir quote posts (por defecto: `true`)
-- `INCLUDE_REPOSTS`: Incluir reposts (por defecto: `true`)
+- `INCLUDE_REPOSTS`: Incluir reposts (por defecto: `false`)
 - `SCRAPE_REACTIONS`: Extraer reacciones (por defecto: `false`)
 - `MAX_REACTIONS`: Máximo número de reacciones (por defecto: `5`)
 - `SCRAPE_COMMENTS`: Extraer comentarios (por defecto: `false`)
@@ -148,6 +148,38 @@ curl -X POST http://localhost:3003/api/scraper/extract-posts \
     "useHubSpot": true
   }'
 ```
+
+### Opción 3: Obtener información de un deal específico
+
+```bash
+# Ir a la carpeta backend
+cd backend
+
+# Obtener información de un deal por su ID
+npm run get-deal-info 1234567890
+
+# O directamente con node
+node scripts/get-deal-info.js 1234567890
+```
+
+Este comando mostrará **ABSOLUTAMENTE TODAS** las propiedades disponibles del deal, organizadas en secciones:
+
+- **🔹 INFORMACIÓN DEL OBJETO**: ID, estado, fechas del objeto
+- **⭐ PROPIEDADES PRINCIPALES**: dealname, amount, pipeline, stage, etc.
+- **📅 FECHAS IMPORTANTES**: createdate, hs_lastmodifieddate, closedate
+- **📊 ESTADOS DEL DEAL**: hs_is_closed, hs_is_closed_won, probabilidad
+- **📈 ANALYTICS**: Fuente y datos de analytics
+- **🔗 PROPIEDADES DE LINKEDIN**: URLs de posts
+- **🔍 TODAS LAS PROPIEDADES DISPONIBLES**: Lista completa alfabética (con contador total)
+- **💻 JSON COMPLETO**: Para desarrolladores
+
+**🚀 Características avanzadas:**
+- ✅ **Obtención automática de todas las propiedades**: No necesitas especificar qué propiedades consultar
+- ✅ **Incluye TODAS las propiedades**: Estándar y personalizadas con valores no vacíos
+- ✅ **Optimización de rendimiento**: Evita URLs demasiado largas consultando eficientemente
+- ✅ **Muestra el total de propiedades encontradas**
+- ✅ **Formateo inteligente**: Fechas, booleanos y valores vacíos se muestran correctamente
+- ✅ **Sin límites**: Obtiene todas las propiedades disponibles en tiempo real
 
 ## API Endpoints
 
