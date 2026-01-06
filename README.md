@@ -181,6 +181,24 @@ Este comando mostrará **ABSOLUTAMENTE TODAS** las propiedades disponibles del d
 - ✅ **Formateo inteligente**: Fechas, booleanos y valores vacíos se muestran correctamente
 - ✅ **Sin límites**: Obtiene todas las propiedades disponibles en tiempo real
 
+### Opción 4: Verificar estado de scraping de contactos
+
+```bash
+# Verificar cuántos contactos están marcados como scrapeados
+node scripts/verify-scraping-status.js
+```
+
+Este script verifica el estado de scraping de todos los contactos en HubSpot y muestra estadísticas detalladas.
+
+### Opción 5: Resetear estado de scraping (para testing)
+
+```bash
+# ⚠️ ATENCIÓN: Esto marcará TODOS los contactos como NO scrapeados
+node scripts/reset-scraping-status.js
+```
+
+**⚠️ IMPORTANTE**: Este script marca todos los contactos como no scrapeados. Úsalo solo para testing o cuando necesites reiniciar el proceso de scraping.
+
 ## API Endpoints
 
 ### GET /health
@@ -361,6 +379,25 @@ Los logs se guardan en `data/logs/` con un archivo por día:
 ### Scheduler no ejecuta
 - Verifica que `SCRAPE_INTERVAL_MINUTES` esté configurado y sea mayor que 0
 - Revisa los logs para ver si hay errores
+
+## Mejoras Recientes
+
+### ✅ Marcado automático de contactos scrapeados
+- **Problema solucionado**: Los contactos no se marcaban correctamente como scrapeados después del procesamiento
+- **Solución implementada**:
+  - Los contactos se marcan como scrapeados inmediatamente al inicio del procesamiento
+  - Logging detallado para rastrear el marcado de cada contacto
+  - Manejo robusto de errores en el marcado de contactos
+  - Funciona tanto en el scheduler automático como en el endpoint API
+
+### ✅ Scripts de verificación y mantenimiento
+- `scripts/verify-scraping-status.js`: Verifica el estado de scraping de todos los contactos
+- `scripts/reset-scraping-status.js`: Resetea el estado de scraping para testing
+
+### ✅ Mejor manejo de errores
+- Logging mejorado en `markContactAsScraped()` con detalles específicos de errores de HubSpot
+- Los contactos se marcan incluso si hay errores en el procesamiento de posts
+- Validación adicional de `contactId` antes del marcado
 
 ## Tecnologías
 

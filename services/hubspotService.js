@@ -697,13 +697,19 @@ const createDealForPost = async (postData, profileUrl, profileName = null) => {
  */
 const markContactAsScraped = async (contactId) => {
   if (!HUBSPOT_TOKEN) {
+    loggerService.warn('HUBSPOT_TOKEN no configurado, no se puede marcar contacto como scrapeado');
+    return false;
+  }
+
+  if (!contactId) {
+    loggerService.warn('contactId no proporcionado, no se puede marcar contacto como scrapeado');
     return false;
   }
 
   try {
-    loggerService.debug(`Marcando contacto ${contactId} como scrapeado`);
-    
-    await axios.patch(
+    loggerService.debug(`Marcando contacto ${contactId} como scrapeado en HubSpot`);
+
+    const response = await axios.patch(
       `${HUBSPOT_BASE_URL}/crm/v3/objects/contacts/${contactId}`,
       {
         properties: {
@@ -718,10 +724,29 @@ const markContactAsScraped = async (contactId) => {
       }
     );
 
-    loggerService.debug(`Contacto ${contactId} marcado como scrapeado`);
-    return true;
+    if (response.status === 200) {
+      loggerService.debug(`✓ Contacto ${contactId} marcado exitosamente como scrapeado`);
+      return true;
+    } else {
+      loggerService.warn(`✗ Respuesta inesperada (${response.status}) al marcar contacto ${contactId} como scrapeado`);
+      return false;
+    }
   } catch (error) {
-    loggerService.warn(`Error marcando contacto ${contactId} como scrapeado:`, error.message);
+    loggerService.error(`Error marcando contacto ${contactId} como scrapeado:`, error.message);
+
+    if (error.response) {
+      loggerService.error(`Status: ${error.response.status}, Response:`, JSON.stringify(error.response.data, null, 2));
+
+      // Errores específicos de HubSpot
+      if (error.response.status === 404) {
+        loggerService.error(`Contacto ${contactId} no encontrado en HubSpot`);
+      } else if (error.response.status === 401) {
+        loggerService.error('Token de HubSpot inválido o expirado');
+      } else if (error.response.status === 403) {
+        loggerService.error('No tienes permisos para modificar este contacto');
+      }
+    }
+
     return false;
   }
 };

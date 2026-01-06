@@ -53,12 +53,24 @@ const runScheduledScrape = async () => {
 
     for (const profileResult of apifyResults.profiles) {
       const profileInfo = profileMap.get(profileResult.profileUrl);
-      
+
+      // MARCAR CONTACTO COMO SCRAPEADO INMEDIATAMENTE (antes de procesar posts)
+      // Esto asegura que se marque incluso si hay errores en el procesamiento
+      if (profileInfo?.contactId) {
+        loggerService.debug(`Marcando contacto ${profileInfo.contactId} como scrapeado (inicio del procesamiento)`);
+        const marked = await hubspotService.markContactAsScraped(profileInfo.contactId);
+        if (!marked) {
+          loggerService.warn(`⚠️ No se pudo marcar contacto ${profileInfo.contactId} como scrapeado, pero continuando con el procesamiento`);
+        }
+      } else {
+        loggerService.warn(`⚠️ No se encontró contactId para perfil: ${profileResult.profileUrl}`);
+      }
+
       // Asegurar que profileName sea un string, no un objeto
       let profileName = null;
       if (profileInfo?.contactName) {
-        profileName = typeof profileInfo.contactName === 'string' 
-          ? profileInfo.contactName 
+        profileName = typeof profileInfo.contactName === 'string'
+          ? profileInfo.contactName
           : (profileInfo.contactName?.name || String(profileInfo.contactName));
       } else if (profileResult.profileName) {
         if (typeof profileResult.profileName === 'string') {
@@ -70,7 +82,7 @@ const runScheduledScrape = async () => {
           profileName = String(profileResult.profileName);
         }
       }
-      
+
       // Si aún no tenemos nombre, usar la URL como fallback
       const displayName = profileName || profileResult.profileUrl || 'Perfil desconocido';
 
@@ -122,11 +134,6 @@ const runScheduledScrape = async () => {
 
       processedCount += postsSaved;
       profilesProcessed++;
-
-      // Marcar contacto como scrapeado en HubSpot
-      if (profileInfo?.contactId) {
-        await hubspotService.markContactAsScraped(profileInfo.contactId);
-      }
 
       loggerService.info(`  Resumen perfil: ${postsSaved} guardados, ${postsDuplicated} duplicados, ${postsFailed} fallidos`);
     }
@@ -237,6 +244,22 @@ const extractPosts = async (req, res) => {
     let profilesProcessed = 0;
 
     for (const profileResult of apifyResults.profiles) {
+      // Obtener información del contacto si useHubSpot está habilitado
+      let profileInfo = null;
+      if (useHubSpot && hubspotProfiles) {
+        // Buscar el perfil correspondiente en los perfiles de HubSpot
+        profileInfo = hubspotProfiles.find(p => p.linkedinUrl === profileResult.profileUrl);
+      }
+
+      // MARCAR CONTACTO COMO SCRAPEADO INMEDIATAMENTE (antes de procesar posts)
+      if (profileInfo?.contactId) {
+        loggerService.debug(`Marcando contacto ${profileInfo.contactId} como scrapeado (API endpoint)`);
+        const marked = await hubspotService.markContactAsScraped(profileInfo.contactId);
+        if (!marked) {
+          loggerService.warn(`⚠️ No se pudo marcar contacto ${profileInfo.contactId} como scrapeado, pero continuando con el procesamiento`);
+        }
+      }
+
       // Asegurar que profileName sea un string, no un objeto
       let profileName = null;
       if (profileResult.profileName) {
@@ -249,9 +272,9 @@ const extractPosts = async (req, res) => {
           profileName = String(profileResult.profileName);
         }
       }
-      
+
       const displayName = profileName || profileResult.profileUrl || 'Perfil desconocido';
-      
+
       loggerService.info(`\nProcesando perfil: ${displayName}`);
       loggerService.info(`  Posts encontrados: ${profileResult.posts.length}`);
 
