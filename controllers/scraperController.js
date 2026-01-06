@@ -56,18 +56,70 @@ const runScheduledScrape = async () => {
       loggerService.info(`  ${index + 1}. ${profile.profileUrl}`);
     });
 
-    // Procesar resultados y guardar en HubSpot secuencialmente
+    // MARCAR TODOS LOS PERFILES ENVIADOS A APIFY COMO SCRAPEADOS
+    // Si Apify procesó una URL que enviamos, significa que ese perfil fue scrapeado
+    loggerService.info(`\n=== MARCANDO PERFILES COMO SCRAPEADOS ===`);
+    for (const profileInfo of profilesToProcess) {
+      if (profileInfo?.contactId) {
+        loggerService.info(`Marcando contacto ${profileInfo.contactId} (${profileInfo.contactName}) como scrapeado`);
+        const marked = await hubspotService.markContactAsScraped(profileInfo.contactId);
+        if (marked) {
+          loggerService.success(`✓ Contacto ${profileInfo.contactId} marcado como scrapeado`);
+        } else {
+          loggerService.error(`✗ ERROR: No se pudo marcar contacto ${profileInfo.contactId} como scrapeado`);
+        }
+      }
+    }
+
+    // PROCESAR LOS RESULTADOS DE APIFY (posts encontrados)
     const results = [];
     let processedCount = 0;
     let profilesProcessed = 0;
 
     for (const profileResult of apifyResults.profiles) {
-      // Buscar el perfil correspondiente usando la URL normalizada
-      const profileInfo = profileMap.get(profileResult.profileUrl);
+      // Buscar el perfil correspondiente - Apify puede devolver URLs de posts
+      let profileInfo = null;
+
+      // Intentar diferentes estrategias para encontrar el perfil
+      if (profileResult.profileUrl) {
+        // Si es URL de perfil, buscar directamente
+        if (profileResult.profileUrl.includes('linkedin.com/in/') ||
+            profileResult.profileUrl.includes('linkedin.com/company/') ||
+            profileResult.profileUrl.includes('linkedin.com/school/')) {
+          profileInfo = profileMap.get(profileResult.profileUrl);
+        }
+
+        // Si no encontró, buscar por slug
+        if (!profileInfo) {
+          const profileSlug = profileResult.profileUrl.split('/').pop();
+          for (const [url, info] of profileMap.entries()) {
+            const mapSlug = url.split('/').pop();
+            if (mapSlug === profileSlug) {
+              profileInfo = info;
+              break;
+            }
+          }
+        }
+      }
+
+      // Si aún no encontró, buscar por nombre
+      if (!profileInfo && profileResult.profileName) {
+        const resultName = typeof profileResult.profileName === 'string'
+          ? profileResult.profileName.toLowerCase()
+          : (profileResult.profileName?.name || '').toLowerCase();
+
+        for (const [url, info] of profileMap.entries()) {
+          const mapName = (info.contactName || '').toLowerCase();
+          if (mapName.includes(resultName) || resultName.includes(mapName)) {
+            profileInfo = info;
+            break;
+          }
+        }
+      }
 
       // Si no se encuentra el perfil en nuestro mapa, saltar (puede ser que Apify devolvió resultados para URLs no solicitadas)
       if (!profileInfo) {
-        loggerService.warn(`⚠️ URL no encontrada en profileMap, saltando: ${profileResult.profileUrl}`);
+        loggerService.warn(`⚠️ No se pudo asociar resultado de Apify con perfil de HubSpot: ${profileResult.profileUrl || profileResult.profileName}`);
         continue;
       }
 
@@ -116,7 +168,7 @@ const runScheduledScrape = async () => {
           loggerService.info(`  → Guardando post en HubSpot: ${post.url.substring(0, 50)}...`);
           const hubspotResult = await hubspotService.createDealForPost(
             post,
-            profileResult.profileUrl,
+            profileInfo.linkedinUrl, // Usar la URL original del perfil
             displayName
           );
 
@@ -129,7 +181,7 @@ const runScheduledScrape = async () => {
           }
 
           results.push({
-            profileUrl: profileResult.profileUrl,
+            profileUrl: profileInfo.linkedinUrl, // Usar la URL original
             profileName: displayName,
             postUrl: post.url,
             success: hubspotResult && !hubspotResult.duplicate,
@@ -140,7 +192,7 @@ const runScheduledScrape = async () => {
           postsFailed++;
           loggerService.error(`  ✗ Error guardando post en HubSpot: ${error.message}`);
           results.push({
-            profileUrl: profileResult.profileUrl,
+            profileUrl: profileInfo.linkedinUrl, // Usar la URL original
             profileName: displayName,
             postUrl: post.url,
             success: false,
@@ -150,10 +202,13 @@ const runScheduledScrape = async () => {
       }
 
       processedCount += postsSaved;
-      profilesProcessed++;
 
       loggerService.info(`  Resumen perfil: ${postsSaved} guardados, ${postsDuplicated} duplicados, ${postsFailed} fallidos`);
+      profilesProcessed++;
     }
+
+    // Todos los perfiles enviados a Apify fueron marcados como scrapeados
+    loggerService.info(`✓ ${profilesToProcess.length} perfiles marcados como scrapeados`);
 
     // Incrementar contador de rate limit
     await rateLimitService.incrementCount(profilesProcessed);
@@ -307,12 +362,12 @@ const extractPosts = async (req, res) => {
           loggerService.info(`  → Guardando post en HubSpot: ${post.url.substring(0, 50)}...`);
           const hubspotResult = await hubspotService.createDealForPost(
             post,
-            profileResult.profileUrl,
+            profileInfo.linkedinUrl, // Usar la URL original del perfil
             displayName
           );
 
           results.push({
-            profileUrl: profileResult.profileUrl,
+            profileUrl: profileInfo.linkedinUrl, // Usar la URL original
             profileName: displayName,
             postUrl: post.url,
             success: hubspotResult && !hubspotResult.duplicate,
@@ -328,7 +383,7 @@ const extractPosts = async (req, res) => {
         } catch (error) {
           loggerService.error(`  ✗ Error guardando post en HubSpot: ${error.message}`);
           results.push({
-            profileUrl: profileResult.profileUrl,
+            profileUrl: profileInfo.linkedinUrl, // Usar la URL original
             profileName: displayName,
             postUrl: post.url,
             success: false,
