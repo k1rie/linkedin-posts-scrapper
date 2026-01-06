@@ -57,13 +57,17 @@ const runScheduledScrape = async () => {
       // MARCAR CONTACTO COMO SCRAPEADO INMEDIATAMENTE (antes de procesar posts)
       // Esto asegura que se marque incluso si hay errores en el procesamiento
       if (profileInfo?.contactId) {
-        loggerService.debug(`Marcando contacto ${profileInfo.contactId} como scrapeado (inicio del procesamiento)`);
+        loggerService.info(`Marcando contacto ${profileInfo.contactId} (${profileInfo.contactName}) como scrapeado (inicio del procesamiento)`);
         const marked = await hubspotService.markContactAsScraped(profileInfo.contactId);
-        if (!marked) {
-          loggerService.warn(`⚠️ No se pudo marcar contacto ${profileInfo.contactId} como scrapeado, pero continuando con el procesamiento`);
+        if (marked) {
+          loggerService.success(`✓ Contacto ${profileInfo.contactId} marcado como scrapeado`);
+        } else {
+          loggerService.error(`✗ ERROR: No se pudo marcar contacto ${profileInfo.contactId} como scrapeado`);
         }
       } else {
-        loggerService.warn(`⚠️ No se encontró contactId para perfil: ${profileResult.profileUrl}`);
+        loggerService.error(`✗ ERROR: No se encontró contactId para perfil: ${profileResult.profileUrl}`);
+        loggerService.error(`ProfileInfo:`, JSON.stringify(profileInfo, null, 2));
+        loggerService.error(`ProfileResult:`, JSON.stringify(profileResult, null, 2));
       }
 
       // Asegurar que profileName sea un string, no un objeto
@@ -186,25 +190,26 @@ const extractPosts = async (req, res) => {
     const { profileLinks, useHubSpot } = req.body;
 
     let profilesToScrape = [];
+    let hubspotProfiles = null; // Para mantener la información completa cuando se usa HubSpot
 
     // Si useHubSpot está habilitado, obtener perfiles desde HubSpot
     if (useHubSpot && process.env.HUBSPOT_TOKEN) {
       loggerService.info('Obteniendo perfiles desde HubSpot...');
       try {
-        const hubspotProfiles = await hubspotService.getLinkedInProfilesFromHubSpot();
+        hubspotProfiles = await hubspotService.getLinkedInProfilesFromHubSpot();
         profilesToScrape = hubspotProfiles.map(p => p.linkedinUrl);
         loggerService.info(`Perfiles obtenidos desde HubSpot: ${profilesToScrape.length}`);
       } catch (error) {
         loggerService.error('Error obteniendo perfiles desde HubSpot', error);
-        return res.status(500).json({ 
-          error: `Error obteniendo perfiles desde HubSpot: ${error.message}` 
+        return res.status(500).json({
+          error: `Error obteniendo perfiles desde HubSpot: ${error.message}`
         });
       }
     } else {
       // Usar profileLinks del request
       if (!profileLinks || !Array.isArray(profileLinks) || profileLinks.length === 0) {
-        return res.status(400).json({ 
-          error: 'profileLinks debe ser un array no vacío o useHubSpot debe estar habilitado' 
+        return res.status(400).json({
+          error: 'profileLinks debe ser un array no vacío o useHubSpot debe estar habilitado'
         });
       }
       profilesToScrape = profileLinks;
@@ -243,12 +248,17 @@ const extractPosts = async (req, res) => {
     const results = [];
     let profilesProcessed = 0;
 
+    // Crear profileMap si estamos usando HubSpot (similar a runScheduledScrape)
+    let profileMap = null;
+    if (useHubSpot && hubspotProfiles) {
+      profileMap = new Map(hubspotProfiles.map(p => [p.linkedinUrl, p]));
+    }
+
     for (const profileResult of apifyResults.profiles) {
       // Obtener información del contacto si useHubSpot está habilitado
       let profileInfo = null;
-      if (useHubSpot && hubspotProfiles) {
-        // Buscar el perfil correspondiente en los perfiles de HubSpot
-        profileInfo = hubspotProfiles.find(p => p.linkedinUrl === profileResult.profileUrl);
+      if (useHubSpot && profileMap) {
+        profileInfo = profileMap.get(profileResult.profileUrl);
       }
 
       // MARCAR CONTACTO COMO SCRAPEADO INMEDIATAMENTE (antes de procesar posts)
