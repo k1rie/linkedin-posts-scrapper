@@ -43,8 +43,18 @@ const runScheduledScrape = async () => {
     const profileMap = new Map(profilesToProcess.map(p => [p.linkedinUrl, p]));
 
     loggerService.info(`\n=== LLAMANDO A APIFY CON ${profileUrls.length} PERFILES (1 EJECUCIÓN = 1 COBRO) ===`);
+    loggerService.info(`URLs enviadas a Apify (primeras 5):`);
+    profileUrls.slice(0, 5).forEach((url, index) => {
+      loggerService.info(`  ${index + 1}. ${url}`);
+    });
+
     const apifyResults = await apifyService.extractPostsFromProfiles(profileUrls);
     loggerService.success(`✓ Apify completado. ${apifyResults.totalItems} posts extraídos de ${apifyResults.profiles.length} perfiles`);
+
+    loggerService.info(`URLs devueltas por Apify (primeras 5):`);
+    apifyResults.profiles.slice(0, 5).forEach((profile, index) => {
+      loggerService.info(`  ${index + 1}. ${profile.profileUrl}`);
+    });
 
     // Procesar resultados y guardar en HubSpot secuencialmente
     const results = [];
@@ -52,7 +62,14 @@ const runScheduledScrape = async () => {
     let profilesProcessed = 0;
 
     for (const profileResult of apifyResults.profiles) {
+      // Buscar el perfil correspondiente usando la URL normalizada
       const profileInfo = profileMap.get(profileResult.profileUrl);
+
+      // Si no se encuentra el perfil en nuestro mapa, saltar (puede ser que Apify devolvió resultados para URLs no solicitadas)
+      if (!profileInfo) {
+        loggerService.warn(`⚠️ URL no encontrada en profileMap, saltando: ${profileResult.profileUrl}`);
+        continue;
+      }
 
       // MARCAR CONTACTO COMO SCRAPEADO INMEDIATAMENTE (antes de procesar posts)
       // Esto asegura que se marque incluso si hay errores en el procesamiento
@@ -64,10 +81,6 @@ const runScheduledScrape = async () => {
         } else {
           loggerService.error(`✗ ERROR: No se pudo marcar contacto ${profileInfo.contactId} como scrapeado`);
         }
-      } else {
-        loggerService.error(`✗ ERROR: No se encontró contactId para perfil: ${profileResult.profileUrl}`);
-        loggerService.error(`ProfileInfo:`, JSON.stringify(profileInfo, null, 2));
-        loggerService.error(`ProfileResult:`, JSON.stringify(profileResult, null, 2));
       }
 
       // Asegurar que profileName sea un string, no un objeto

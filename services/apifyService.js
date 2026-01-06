@@ -88,10 +88,49 @@ const extractPostsFromProfiles = async (profileUrls) => {
 
         // Normalizar URL del perfil
         let normalizedProfileUrl = profileUrl;
-        if (!normalizedProfileUrl.includes('linkedin.com/in/')) {
-          // Intentar extraer de diferentes formatos
+
+        // Función para normalizar URLs de LinkedIn
+        const normalizeLinkedInUrl = (url) => {
+          if (!url) return url;
+          let normalized = url.trim();
+
+          // Asegurar que empiece con https://
+          if (!normalized.startsWith('http')) {
+            normalized = `https://${normalized}`;
+          }
+
+          // Remover parámetros de query y fragmentos
+          normalized = normalized.split('?')[0].split('#')[0];
+
+          return normalized;
+        };
+
+        normalizedProfileUrl = normalizeLinkedInUrl(normalizedProfileUrl);
+
+        // Intentar extraer URL de perfil de diferentes campos
+        if (!normalizedProfileUrl.includes('linkedin.com/in/') &&
+            !normalizedProfileUrl.includes('linkedin.com/company/') &&
+            !normalizedProfileUrl.includes('linkedin.com/school/')) {
+
+          // Si es una URL de post, intentar extraer el perfil del autor
           if (item.authorUrl) {
-            normalizedProfileUrl = item.authorUrl;
+            normalizedProfileUrl = normalizeLinkedInUrl(item.authorUrl);
+          } else if (item.author && typeof item.author === 'object' && item.author.url) {
+            normalizedProfileUrl = normalizeLinkedInUrl(item.author.url);
+          } else if (item.author && typeof item.author === 'object' && item.author.profileUrl) {
+            normalizedProfileUrl = normalizeLinkedInUrl(item.author.profileUrl);
+          }
+
+          // Si aún no es una URL de perfil válida, intentar extraer del post URL
+          if (!normalizedProfileUrl.includes('linkedin.com/in/') &&
+              !normalizedProfileUrl.includes('linkedin.com/company/') &&
+              !normalizedProfileUrl.includes('linkedin.com/school/') &&
+              profileUrl.includes('/posts/')) {
+            // Intentar extraer el perfil del slug del post
+            const match = profileUrl.match(/linkedin\.com\/(in|company|school)\/([^\/]+)/);
+            if (match) {
+              normalizedProfileUrl = `https://www.linkedin.com/${match[1]}/${match[2]}`;
+            }
           }
         }
 

@@ -391,18 +391,26 @@ const getLinkedInProfilesFromHubSpot = async () => {
       if (linkedinUrl && typeof linkedinUrl === 'string' && linkedinUrl.includes('linkedin.com')) {
         contactsWithLinkedIn++;
         let profileUrl = linkedinUrl.trim();
-        
+
         if (!profileUrl.startsWith('http')) {
           profileUrl = `https://${profileUrl}`;
         }
-        
-        if (profileUrl.includes('linkedin.com/in/')) {
-          profileUrl = profileUrl.split('?')[0].split('#')[0];
-          
+
+        // Normalizar URL: remover parámetros de query y fragmentos
+        profileUrl = profileUrl.split('?')[0].split('#')[0];
+
+        // Solo incluir URLs que parezcan perfiles válidos
+        // linkedin.com/in/ (perfiles personales)
+        // linkedin.com/company/ (páginas de empresa)
+        // linkedin.com/school/ (escuelas)
+        if (profileUrl.includes('linkedin.com/in/') ||
+            profileUrl.includes('linkedin.com/company/') ||
+            profileUrl.includes('linkedin.com/school/')) {
+
           profiles.push({
             contactId: contact.vid,
-            contactName: properties.firstname?.value || 
-                        properties.name?.value || 
+            contactName: properties.firstname?.value ||
+                        properties.name?.value ||
                         `${properties.firstname?.value || ''} ${properties.lastname?.value || ''}`.trim() ||
                         'Unknown',
             linkedinUrl: profileUrl
